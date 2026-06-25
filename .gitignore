@@ -4,6 +4,7 @@
 
 # Python
 *.pyc
+*.so
 
 # Rust
 target
