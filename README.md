@@ -10,8 +10,8 @@ This solver builds upon the foundational piecewise-sinusoidal thin-wire codes de
 
 This is a **Mixed Python/Rust** project. It combines the high-level ease of Python for geometry definition and post-processing with the raw performance of Rust for dense complex matrix filling and mathematical integrations.
 
-* **`src/lib.rs` (`mbc_lib`)**: The compiled Rust backend containing the memory-safe data structures (`Node`, `Segment`, `Mesh`) and the parallelized impedance matrix solvers. Compiled via PyO3.
-* **`mbc_mom/`**: The frontend Python package. It acts as a wrapper around `mbc_lib`, exposing a clean API and providing static typing signatures (`.pyi` files) for language servers like Pylance/Jedi.
+* **`src/lib.rs` (`mbc_mom`)**: The compiled Rust backend containing the memory-safe data structures (`Node`, `Segment`, `Mesh`) and the parallelized impedance matrix solvers. Compiled via PyO3.
+* **`mbc_mom/`**: The frontend Python package. It acts as a wrapper around `mbc_mom`, exposing a clean API and providing static typing signatures (`.pyi` files) for language servers like Pylance/Jedi.
 * **`pyproject.toml`**: Configured to use `maturin` as the build backend, injecting the compiled Rust `.so` directly into the `mbc_mom` Python package.
 
 ---
@@ -35,7 +35,8 @@ pixi run build-dev
 ### 3. Cleaning the environment
 
 ```bash
-pixi run pip uninstall mbc-mom -y
+pixi run uv cache clean
+pixi run pip uninstall mbc-mom mbc-lib -y
 pixi run cargo clean
 pixi run build-dev
 ```

@@ -141,9 +141,15 @@ impl Mesh {
 
 /// A Python module implemented in Rust using the modern Bound API.
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Node>()?;
-    m.add_class::<Segment>()?;
-    m.add_class::<Dipole>()?;
-    m.add_class::<Mesh>()?;
+    let py = m.py();
+    let geometry_module = PyModule::new(py, "geometry")?;
+
+    geometry_module.add_class::<Node>()?;
+    geometry_module.add_class::<Segment>()?;
+    geometry_module.add_class::<Dipole>()?;
+    geometry_module.add_class::<Mesh>()?;
+
+    // m.add_function(wrap_pyfunction!(test_func, &itur_module)?)?;
+    m.add_submodule(&geometry_module)?;
     Ok(())
 }

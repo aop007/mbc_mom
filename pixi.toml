@@ -3,12 +3,14 @@ authors = ["Alexis Ouellet Patenaude <alexis.ouellet.patenaude@gmail.com>"]
 channels = ["conda-forge"]
 name = "mbc-mom"
 platforms = ["linux-64"]
-version = "0.1.0"
+version = "0.1.1"
 description = "Multiradius Bridge Currents Method of Moments Solver"
 
 [tasks]
 # Shortcut to build and compile the Rust module via maturin
 build-dev = "maturin develop --release --uv"
+build-dev-2 = {cmd = "RUSTFLAGS='-A warnings' PYTHONPATH=$PIXI_PROJECT_ROOT pixi run maturin develop --release", cwd = "."}
+clean = "uv cache clean && pip uninstall mbc-mom mbc-lib -y && cargo clean && echo 'CLEAN DONE!'"
 
 [dependencies]
 rust = ">=1.96.0,<1.97"
@@ -24,6 +26,6 @@ mypy = ">=2.1.0,<3"
 # We tell pixi to install our local directory in editable mode
 mbc-mom = { path = ".", editable = true }
 
-[tool.maturin]
+# [tool.maturin]
 # This tells Maturin to put the compiled mbc_lib inside the mbc_mom python package
-module-name = "mbc_mom.mbc_lib"
+# module-name = "mbc_mom.mbc_lib"

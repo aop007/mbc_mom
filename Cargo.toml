@@ -1,11 +1,11 @@
 [package]
 name = "mbc-mom"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "mbc_lib"
+name = "mbc_mom"
 crate-type = ["cdylib"]
 
 [dependencies]

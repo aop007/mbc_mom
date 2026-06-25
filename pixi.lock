@@ -2684,4 +2684,4 @@ packages:
   timestamp: 1767016325805
 - pypi: ./
   name: mbc-mom
-  requires_python: '>=3.8'
+  requires_python: '>=3.14'
