@@ -23,3 +23,7 @@ mypy = ">=2.1.0,<3"
 [pypi-dependencies]
 # We tell pixi to install our local directory in editable mode
 mbc-mom = { path = ".", editable = true }
+
+[tool.maturin]
+# This tells Maturin to put the compiled mbc_lib inside the mbc_mom python package
+module-name = "mbc_mom.mbc_lib"

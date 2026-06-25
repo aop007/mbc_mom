@@ -85,7 +85,7 @@ impl Mesh {
 
 /// A Python module implemented in Rust using the modern Bound API.
 #[pymodule]
-fn mbc_mom(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn mbc_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Node>()?;
     m.add_class::<Segment>()?;
     m.add_class::<Mesh>()?;
