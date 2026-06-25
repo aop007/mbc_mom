@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 mod geometry;
-// pub mod expj;
+pub mod expj;
 
 #[pyfunction]
 pub fn test_interface() -> () {
