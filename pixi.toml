@@ -11,6 +11,7 @@ description = "Multiradius Bridge Currents Method of Moments Solver"
 build-dev = "maturin develop --release --uv"
 build-dev-2 = {cmd = "RUSTFLAGS='-A warnings' PYTHONPATH=$PIXI_PROJECT_ROOT pixi run maturin develop --release", cwd = "."}
 clean = "uv cache clean && rm -rf ~/.cache/rattler/cache/uv-cache/ && pip uninstall mbc-mom mbc-lib -y && cargo clean && echo 'CLEAN DONE!'"
+clean-build = "uv cache clean && rm -rf ~/.cache/rattler/cache/uv-cache/ && pip uninstall mbc-mom mbc-lib -y && cargo clean && maturin develop --release --uv"
 
 [dependencies]
 rust = ">=1.96.0,<1.97"
@@ -21,6 +22,8 @@ maturin = ">=1.14.1,<2"
 pip = ">=26.1.2,<27"
 uv = ">=0.11.24,<0.12"
 mypy = ">=2.1.0,<3"
+scipy = ">=1.18.0,<2"
+tabulate = ">=0.10.0,<0.11"
 
 [pypi-dependencies]
 # We tell pixi to install our local directory in editable mode

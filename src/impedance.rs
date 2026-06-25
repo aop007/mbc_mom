@@ -10,55 +10,58 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
     let n = mesh.dipoles.len();
     let mut z_matrix = vec![Complex64::new(0.0, 0.0); n * n];
 
-    let omega = 2.0 * PI * frequency_hz;
-    let mu_0 = 4.0 * PI * 1e-7;
-    let eps_0 = 8.854187817e-12;
-    let k = Complex64::new(omega * (mu_0 * eps_0).sqrt(), 0.0); // Free-space wavenumber
+    // Free-space wavenumber k = 2 * pi * f / c
+    let k = (2.0 * PI * frequency_hz) / 299_792_458.0;
 
-    // Parallelize across the flat N x N matrix
     z_matrix.par_iter_mut().enumerate().for_each(|(idx, z_val)| {
         let i = idx / n;
         let j = idx % n;
 
-        // MBC enforces exact reciprocity, so Z_ij == Z_ji. 
-        // We only compute the upper triangle and diagonal to save 50% compute time!
         if i <= j {
-            let dipole_i = &mesh.dipoles[i];
-            let dipole_j = &mesh.dipoles[j];
+            let dip_i = &mesh.dipoles[i];
+            let dip_j = &mesh.dipoles[j];
 
-            // A dipole is composed of two segments (monopoles).
-            // Let Dipole I = Monopoles 1 & 2. Dipole J = Monopoles 3 & 4.
-            // Z_ij = Z_13 + Z_14 + Z_23 + Z_24
-            
-            let z13 = monopole_mutual(
-                &mesh.segments[dipole_i.seg1_idx], 
-                &mesh.segments[dipole_j.seg1_idx], 
-                &mesh.nodes, k, dipole_i.mbc_offset, dipole_j.mbc_offset
-            );
-            
-            let z14 = monopole_mutual(
-                &mesh.segments[dipole_i.seg1_idx], 
-                &mesh.segments[dipole_j.seg2_idx], 
-                &mesh.nodes, k, dipole_i.mbc_offset, dipole_j.mbc_offset
-            );
-            
-            let z23 = monopole_mutual(
-                &mesh.segments[dipole_i.seg2_idx], 
-                &mesh.segments[dipole_j.seg1_idx], 
-                &mesh.nodes, k, dipole_i.mbc_offset, dipole_j.mbc_offset
-            );
-            
-            let z24 = monopole_mutual(
-                &mesh.segments[dipole_i.seg2_idx], 
-                &mesh.segments[dipole_j.seg2_idx], 
-                &mesh.nodes, k, dipole_i.mbc_offset, dipole_j.mbc_offset
-            );
+            let seg1_i = &mesh.segments[dip_i.seg1_idx];
+            let seg2_i = &mesh.segments[dip_i.seg2_idx];
+            let seg1_j = &mesh.segments[dip_j.seg1_idx];
+            let seg2_j = &mesh.segments[dip_j.seg2_idx];
 
-            *z_val = z13 + z14 + z23 + z24;
+            let junc_i_seg1_is_end = seg1_i.end_idx == dip_i.junction_idx;
+            let junc_i_seg2_is_end = seg2_i.end_idx == dip_i.junction_idx;
+            
+            let junc_j_seg1_is_end = seg1_j.end_idx == dip_j.junction_idx;
+            let junc_j_seg2_is_end = seg2_j.end_idx == dip_j.junction_idx;
+
+            // KCL Reference Directions: Current flows from seg1 -> junction -> seg2
+            // seg1 should flow TOWARDS the junction
+            let sign1_i = if junc_i_seg1_is_end { 1.0 } else { -1.0 };
+            // seg2 should flow AWAY FROM the junction
+            let sign2_i = if !junc_i_seg2_is_end { 1.0 } else { -1.0 };
+
+            let sign1_j = if junc_j_seg1_is_end { 1.0 } else { -1.0 };
+            let sign2_j = if !junc_j_seg2_is_end { 1.0 } else { -1.0 };
+
+            let z13 = monopole_mutual(seg1_i, seg1_j, &mesh.nodes, k, dip_i.mbc_offset, dip_j.mbc_offset, junc_i_seg1_is_end, junc_j_seg1_is_end);
+            let z14 = monopole_mutual(seg1_i, seg2_j, &mesh.nodes, k, dip_i.mbc_offset, dip_j.mbc_offset, junc_i_seg1_is_end, junc_j_seg2_is_end);
+            let z23 = monopole_mutual(seg2_i, seg1_j, &mesh.nodes, k, dip_i.mbc_offset, dip_j.mbc_offset, junc_i_seg2_is_end, junc_j_seg1_is_end);
+            let z24 = monopole_mutual(seg2_i, seg2_j, &mesh.nodes, k, dip_i.mbc_offset, dip_j.mbc_offset, junc_i_seg2_is_end, junc_j_seg2_is_end);
+
+            if false {
+                println!("[{},{}] z13: {} Ohms", i, j, z13);
+                println!("[{},{}] z14: {} Ohms", i, j, z14);
+                println!("[{},{}] z23: {} Ohms", i, j, z23);
+                println!("[{},{}] z24: {} Ohms", i, j, z24);
+            }
+
+            // Apply the directional signs to the matrix sum
+            *z_val = Complex64::new(sign1_i * sign1_j, 0.0) * z13 +
+                     Complex64::new(sign1_i * sign2_j, 0.0) * z14 +
+                     Complex64::new(sign2_i * sign1_j, 0.0) * z23 +
+                     Complex64::new(sign2_i * sign2_j, 0.0) * z24;
         }
     });
 
-    // Mirror the upper triangle to the lower triangle
+    // Mirror the upper triangle to the lower triangle (Exact Reciprocity)
     for i in 0..n {
         for j in 0..i {
             z_matrix[i * n + j] = z_matrix[j * n + i];
@@ -68,21 +71,19 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
     z_matrix
 }
 
-/// Computes the mutual impedance between two filamentary monopoles.
+/// Robust 2D Numerical Quadrature for Monopole Mutual Impedance.
+/// Safely bypasses the 1/R singularity due to the MBC multiradius offset.
 fn monopole_mutual(
-    seg_a: &Segment, 
-    seg_b: &Segment, 
-    nodes: &Vec<Node>, 
-    k: Complex64,
-    offset_a: f64,
-    offset_b: f64
+    seg_a: &Segment, seg_b: &Segment,
+    nodes: &[Node], k: f64,
+    offset_a: f64, offset_b: f64,
+    junc_a_is_end: bool, junc_b_is_end: bool
 ) -> Complex64 {
     let n_a1 = &nodes[seg_a.start_idx];
     let n_a2 = &nodes[seg_a.end_idx];
     let n_b1 = &nodes[seg_b.start_idx];
     let n_b2 = &nodes[seg_b.end_idx];
 
-    // 1. Calculate length and unit vectors
     let len_a = seg_a.length(nodes);
     let len_b = seg_b.length(nodes);
 
@@ -98,97 +99,76 @@ fn monopole_mutual(
         (n_b2.z - n_b1.z) / len_b,
     ];
 
-    // 2. Cosine of the skew angle (Dot product)
-    let cos_psi = s_hat[0]*t_hat[0] + s_hat[1]*t_hat[1] + s_hat[2]*t_hat[2];
+    let s_dot_t = s_hat[0]*t_hat[0] + s_hat[1]*t_hat[1] + s_hat[2]*t_hat[2];
 
-    // 3. MBC Offset Override
-    // The true distance D is bounded by the MBC multiradius rule.
-    let mbc_d = offset_a.max(offset_b);
+    // The MBC multiradius rule bounds the Green's function
+    let mbc_offset = offset_a.max(offset_b);
+    let offset_sq = mbc_offset * mbc_offset;
 
-    // If segments are perfectly parallel (cos_psi == 1.0 or -1.0)
-    if cos_psi.abs() > 0.999999 {
-        return parallel_mutual_impedance(len_a, len_b, mbc_d, k, cos_psi);
-    }
-
-    // 4. Skewed Coordinate Projection
-    // We project the start points onto the apparent intersection origin.
-    // Solving the linear system to find the (S, T) origin of intersection:
-    let sin2_psi = 1.0 - cos_psi * cos_psi;
+    // --- NEW: Dynamic Quadrature Resolution ---
+    // A thin wire (large aspect ratio) needs extremely fine resolution 
+    // to capture the sharp 1/R near-field singularity peak.
+    let aspect_ratio = len_a.max(len_b) / mbc_offset;
     
-    let vec_r = [
-        n_b1.x - n_a1.x,
-        n_b1.y - n_a1.y,
-        n_b1.z - n_a1.z,
-    ];
+    // Scale steps dynamically. Minimum 50 for thick wires, capped at 2000 
+    // for ultra-thin wires to maintain sub-second performance in Rust.
+    let steps = (aspect_ratio * 0.8) as usize;
+    let steps = steps.clamp(50, 2000);
 
-    let r_dot_s = vec_r[0]*s_hat[0] + vec_r[1]*s_hat[1] + vec_r[2]*s_hat[2];
-    let r_dot_t = vec_r[0]*t_hat[0] + vec_r[1]*t_hat[1] + vec_r[2]*t_hat[2];
+    let ds = len_a / (steps as f64);
+    let dt = len_b / (steps as f64);
 
-    let s1 = (r_dot_s - r_dot_t * cos_psi) / sin2_psi;
-    let t1 = (r_dot_s * cos_psi - r_dot_t) / sin2_psi;
+    let sin_kl_a = (k * len_a).sin();
+    let sin_kl_b = (k * len_b).sin();
 
-    let s2 = s1 + len_a;
-    let t2 = t1 + len_b;
+    let mut sum = Complex64::new(0.0, 0.0);
+    let j_cplx = Complex64::new(0.0, 1.0);
 
-    // 5. Evaluate the Exact Richmond Closed-Form Integrals
-    skew_mutual_impedance(s1, s2, t1, t2, mbc_d, cos_psi, k, len_a, len_b)
-}
+    for i in 0..steps {
+        let s = (i as f64 + 0.5) * ds;
+        
+        // PWS Current Shape & Derivative for Segment A
+        let (i_a, di_a) = if junc_a_is_end {
+            ( (k * s).sin() / sin_kl_a, k * (k * s).cos() / sin_kl_a )
+        } else {
+            ( (k * (len_a - s)).sin() / sin_kl_a, -k * (k * (len_a - s)).cos() / sin_kl_a )
+        };
 
-/// The core closed-form evaluation for skew monopoles
-fn skew_mutual_impedance(
-    s1: f64, s2: f64, 
-    t1: f64, t2: f64, 
-    d: f64, cos_psi: f64, 
-    k: Complex64, len_a: f64, len_b: f64
-) -> Complex64 {
-    let gamma = Complex64::new(0.0, 1.0) * k; // \gamma = j * k
-    let eta = Complex64::new(376.7303, 0.0);  // Intrinsic impedance of free space
+        let px = n_a1.x + s_hat[0] * s;
+        let py = n_a1.y + s_hat[1] * s;
+        let pz = n_a1.z + s_hat[2] * s;
 
-    // Extracting the sine terms for the piecewise-sinusoidal currents
-    let sin_a = (gamma * len_a).sinh();
-    let sin_b = (gamma * len_b).sinh();
+        for j in 0..steps {
+            let t = (j as f64 + 0.5) * dt;
 
-    let constant = eta / (Complex64::new(16.0 * PI, 0.0) * sin_a * sin_b);
+            // PWS Current Shape & Derivative for Segment B
+            let (i_b, di_b) = if junc_b_is_end {
+                ( (k * t).sin() / sin_kl_b, k * (k * t).cos() / sin_kl_b )
+            } else {
+                ( (k * (len_b - t)).sin() / sin_kl_b, -k * (k * (len_b - t)).cos() / sin_kl_b )
+            };
 
-    let mut z_mutual = Complex64::new(0.0, 0.0);
+            let qx = n_b1.x + t_hat[0] * t;
+            let qy = n_b1.y + t_hat[1] * t;
+            let qz = n_b1.z + t_hat[2] * t;
 
-    // The double summation over the expansion and testing endpoints (p=1..2, q=1..2)
-    // using the expj_path function evaluated across the 4 combinations of endpoints.
-    // (Translating Richmond's GGMM loop logic)
-    let s_vals = [s1, s2];
-    let t_vals = [t1, t2];
-
-    for p in 0..2 {
-        let m = if p == 0 { 1.0 } else { -1.0 };
-        for q in 0..2 {
-            let n = if q == 0 { 1.0 } else { -1.0 };
+            let dx = px - qx;
+            let dy = py - qy;
+            let dz = pz - qz;
             
-            // To evaluate I_{pq}, we compute the 4 sub-integrals w12
-            // using the expj::expj_path(v1, v2) solver.
-            // This isolates the exact field couplings.
-            let r_dist = (d*d + s_vals[p]*s_vals[p] + t_vals[q]*t_vals[q] - 2.0*s_vals[p]*t_vals[q]*cos_psi).sqrt();
+            // 3D Distance with MBC bounded offset
+            let dist = (dx*dx + dy*dy + dz*dz + offset_sq).sqrt();
+
+            let green = (-j_cplx * k * dist).exp() / dist;
+
+            // Symmetric Mutual Impedance Integrand (Tilston & Balmain 1988, Eq 5)
+            let term = s_dot_t * i_a * i_b - (di_a * di_b) / (k * k);
             
-            // Note: A full implementation of Richmond's 4-term exponential evaluation 
-            // per (p,q) pair requires expanding to the exact u0, w, x, y arguments.
-            // For now, we apply the symmetric coupling weight:
-            let weight = (gamma * (m * s_vals[p] + n * t_vals[q])).exp();
-            
-            // Dummy placeholder for the EXPJ sum:
-            let integral_sum = Complex64::new(r_dist, 0.0) * weight; 
-            
-            z_mutual += constant * integral_sum;
+            sum += green * term;
         }
     }
 
-    z_mutual
-}
-
-/// Fallback for perfectly parallel segments
-fn parallel_mutual_impedance(
-    len_a: f64, len_b: f64, 
-    d: f64, k: Complex64, 
-    cos_psi: f64
-) -> Complex64 {
-    // Parallel logic skips the S, T projection and uses axial distance
-    Complex64::new(0.0, 0.0)
+    // Multiply by (j * \eta * k) / (4 * \pi) * ds * dt
+    let multiplier = j_cplx * (376.7303 / (4.0 * PI)) * k;
+    sum * multiplier * ds * dt
 }
