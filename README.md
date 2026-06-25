@@ -39,3 +39,10 @@ pixi run pip uninstall mbc-mom -y
 pixi run cargo clean
 pixi run build-dev
 ```
+
+### 4. Running tests
+
+```bash
+pixi run python -m tests.test_rust_interface
+```
+
