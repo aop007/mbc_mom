@@ -9,4 +9,5 @@ name = "mbc_lib"
 crate-type = ["cdylib"]
 
 [dependencies]
+num-complex = "0.4.6"
 pyo3 = "0.29.0"

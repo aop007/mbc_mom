@@ -2,4 +2,8 @@
 .pixi/*
 !.pixi/config.toml
 
+# Python
+*.pyc
+
+# Rust
 target
