@@ -33,6 +33,18 @@ pub struct Segment {
     pub radius: f64,
 }
 
+impl Segment {
+    /// Computes the physical length of the segment (Fast, Zero-copy, Rust-only)
+    pub fn length(&self, nodes: &[Node]) -> f64 {
+        let start = &nodes[self.start_idx];
+        let end = &nodes[self.end_idx];
+        let dx = end.x - start.x;
+        let dy = end.y - start.y;
+        let dz = end.z - start.z;
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+}
+
 #[pymethods]
 impl Segment {
     #[new]
@@ -44,14 +56,9 @@ impl Segment {
         }
     }
     
-    /// Computes the physical length of the segment given the node list.
-    pub fn length(&self, nodes: Vec<Node>) -> f64 {
-        let start = &nodes[self.start_idx];
-        let end = &nodes[self.end_idx];
-        let dx = end.x - start.x;
-        let dy = end.y - start.y;
-        let dz = end.z - start.z;
-        (dx * dx + dy * dy + dz * dz).sqrt()
+    #[pyo3(name = "length")]
+    pub fn py_length(&self, nodes: Vec<Node>) -> f64 {
+        self.length(&nodes)
     }
 }
 
