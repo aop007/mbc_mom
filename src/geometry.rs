@@ -151,5 +151,10 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // m.add_function(wrap_pyfunction!(test_func, &itur_module)?)?;
     m.add_submodule(&geometry_module)?;
+
+    let sys = py.import("sys")?;
+    let sys_modules = sys.getattr("modules")?;
+    sys_modules.set_item("mbc_mom.geometry", &geometry_module)?;
+
     Ok(())
 }

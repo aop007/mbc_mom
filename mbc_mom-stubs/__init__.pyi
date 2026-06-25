@@ -1,0 +1,3 @@
+from . import geometry as geometry
+
+def test_interface() -> None: ...

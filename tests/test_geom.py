@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from mbc_mom import Mesh, Node, Segment
+from mbc_mom.geometry import Mesh, Node, Segment 
 
 def test_mbc_topology():
     mesh = Mesh()
