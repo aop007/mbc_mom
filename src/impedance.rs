@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use std::f64::consts::PI;
 
 use crate::geometry::{Mesh, Dipole};
-use crate::expj;
+use crate::sommerfeld::{GroundPhysics, SommerfeldTable};
 
 struct SubSegment {
     p1: [f64; 3],
@@ -82,15 +82,23 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
     // Free-space wavenumber k = 2 * pi * f / c
     let k = (2.0 * PI * frequency_hz) / 299_792_458.0;
     let has_ground = mesh.ground_plane.is_some();
-    let (is_pec, eps_r, sigma) = if let Some(g) = &mesh.ground_plane {
-        (g.is_pec, g.eps_r, g.sigma)
+    let (is_pec, eps_r, sigma, use_sommerfeld) = if let Some(g) = &mesh.ground_plane {
+        (g.is_pec, g.eps_r, g.sigma, g.use_sommerfeld)
     } else {
-        (false, 1.0, 0.0)
+        (false, 1.0, 0.0, false)
     };
 
     let eps_0 = 8.8541878128e-12;
     let omega = 2.0 * PI * frequency_hz;
     let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
+
+    // Generate the Sommerfeld LUT if requested
+    let lut = if has_ground && !is_pec && use_sommerfeld {
+        let physics = GroundPhysics::new(frequency_hz, eps_r, sigma);
+        Some(SommerfeldTable::generate(&physics))
+    } else {
+        None
+    };
 
     z_matrix.par_iter_mut().enumerate().for_each(|(idx, z_val)| {
         let i = idx / n;
@@ -127,7 +135,25 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
 
                         let gamma = if is_pec {
                             Complex64::new(-1.0, 0.0)
+                        } else if let Some(lut_ref) = &lut {
+                            // --- EXACT SOMMERFELD COUPLING ---
+                            let rho = (dx*dx + dy*dy).sqrt();
+                            let z_sum = cz_i.abs() + cz_j.abs();
+                            
+                            // 1. Get the exact numerical integral from the 2D grid
+                            let exact_g = lut_ref.interpolate(rho, z_sum);
+                            
+                            // 2. Evaluate the ideal spatial image Green's function
+                            let ideal_g = (-Complex64::new(0.0, 1.0) * k * r).exp() / r;
+                            
+                            // 3. Extract the Effective Reflection Coefficient
+                            if ideal_g.norm() > 1e-12 {
+                                -(exact_g / ideal_g) 
+                            } else {
+                                Complex64::new(0.0, 0.0)
+                            }
                         } else {
+                            // --- FALLBACK RCA COUPLING ---
                             let cost = if r == 0.0 { 1.0 } else { (dz / r).abs() };
                             let sint_sq = 1.0 - cost * cost;
                             
