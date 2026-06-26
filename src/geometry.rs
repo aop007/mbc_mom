@@ -84,6 +84,19 @@ impl Dipole {
     }
 }
 
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct GroundPlane {
+    #[pyo3(get)]
+    pub is_pec: bool,
+    #[pyo3(get)]
+    pub sigma: f64,
+    #[pyo3(get)]
+    pub eps_r: f64,
+    #[pyo3(get)]
+    pub use_sommerfeld: bool,
+}
+
 /// A container to hold the entire mesh and eventually compute junctions.
 #[pyclass]
 pub struct Mesh {
@@ -93,6 +106,8 @@ pub struct Mesh {
     pub segments: Vec<Segment>,
     #[pyo3(get)]
     pub dipoles: Vec<Dipole>,
+    #[pyo3(get)]
+    pub ground_plane: Option<GroundPlane>,
 }
 
 #[pymethods]
@@ -103,6 +118,7 @@ impl Mesh {
             nodes: Vec::new(),
             segments: Vec::new(),
             dipoles: Vec::new(),
+            ground_plane: None,
         }
     }
 
@@ -144,6 +160,26 @@ impl Mesh {
             }
         }
     }
+
+    /// Sets the environment to a Perfectly Electric Conducting (PEC) half-space
+    pub fn set_pec_ground(&mut self) {
+        self.ground_plane = Some(GroundPlane {
+            is_pec: true,
+            sigma: 0.0,
+            eps_r: 1.0,
+            use_sommerfeld: false,
+        });
+    }
+
+    /// Sets the environment to a Homogeneous Dielectric half-space
+    pub fn set_real_ground(&mut self, sigma: f64, eps_r: f64, use_sommerfeld: bool) {
+        self.ground_plane = Some(GroundPlane {
+            is_pec: false,
+            sigma,
+            eps_r,
+            use_sommerfeld,
+        });
+    }
 }
 
 /// A Python module implemented in Rust using the modern Bound API.
@@ -154,6 +190,7 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     geometry_module.add_class::<Node>()?;
     geometry_module.add_class::<Segment>()?;
     geometry_module.add_class::<Dipole>()?;
+    geometry_module.add_class::<GroundPlane>()?;
     geometry_module.add_class::<Mesh>()?;
 
     // m.add_function(wrap_pyfunction!(test_func, &itur_module)?)?;

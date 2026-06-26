@@ -1,4 +1,6 @@
-from typing import List
+#!/usr/bin/env python
+
+from typing import List, Optional
 
 class Node:
     x: float
@@ -19,12 +21,22 @@ class Dipole:
     junction_idx: int
     mbc_offset: float
     def __init__(self, seg1_idx: int, seg2_idx: int, junction_idx: int, mbc_offset: float) -> None: ...
+    
+class GroundPlane:
+    is_pec: bool
+    sigma: float
+    eps_r: float
+    use_sommerfeld: bool
 
 class Mesh:
     nodes: List[Node]
     segments: List[Segment]
     dipoles: List[Dipole]
+    ground_plane: Optional[GroundPlane]
+    
     def __init__(self) -> None: ...
     def add_node(self, node: Node) -> int: ...
     def add_segment(self, segment: Segment) -> None: ...
     def build_dipoles(self) -> None: ...
+    def set_pec_ground(self) -> None: ...
+    def set_real_ground(self, sigma: float, eps_r: float, use_sommerfeld: bool) -> None: ...
