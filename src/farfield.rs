@@ -15,6 +15,10 @@ pub fn compute_pattern(
     let k = (2.0 * PI * freq_hz) / 299_792_458.0;
     let eta = 376.7303; // Free-space impedance
 
+    let has_ground = mesh.ground_plane.is_some();
+    // Default to PEC (-1.0 reflection) for now. RCA will go here later!
+    let gamma = if has_ground { Complex64::new(-1.0, 0.0) } else { Complex64::new(0.0, 0.0) };
+
     // 1. Precompute the exact vector moment of every radiating segment
     struct Radiator {
         center: [f64; 3],
@@ -25,14 +29,8 @@ pub fn compute_pattern(
     for (i, dip) in mesh.dipoles.iter().enumerate() {
         let i_dip = currents[i];
         let seg1 = &mesh.segments[dip.seg1_idx];
-        let seg2 = &mesh.segments[dip.seg2_idx];
 
         let junc_seg1_is_end = seg1.end_idx == dip.junction_idx;
-        let junc_seg2_is_end = seg2.end_idx == dip.junction_idx;
-
-        // KCL Flow exactly as defined in impedance.rs
-        let sign1 = if junc_seg1_is_end { 1.0 } else { -1.0 };
-        let sign2 = if !junc_seg2_is_end { 1.0 } else { -1.0 };
 
         let mut process_seg = |seg: &Segment, sign: f64| {
             let start = &mesh.nodes[seg.start_idx];
@@ -68,34 +66,56 @@ pub fn compute_pattern(
             ];
 
             radiators.push(Radiator { center, moment });
+
+            // 2. Virtual Image Radiator
+            if has_ground && gamma != Complex64::new(0.0, 0.0) {
+                let center_img = [center[0], center[1], -center[2]];
+                let u_img = [u[0], u[1], -u[2]]; // The physical Z-vector flips underground
+                
+                // Image moment = Gamma * Mag * U_img
+                let moment_img = [
+                    gamma * moment_mag * u_img[0],
+                    gamma * moment_mag * u_img[1],
+                    gamma * moment_mag * u_img[2],
+                ];
+                radiators.push(Radiator { center: center_img, moment: moment_img });
+            }
         };
+        
+        // KCL Flow exactly as defined in impedance.rs
+        let sign1 = if junc_seg1_is_end { 1.0 } else { -1.0 };
 
         process_seg(seg1, sign1);
-        process_seg(seg2, sign2);
+        
+        if !dip.is_monopole {
+            let seg2 = &mesh.segments[dip.seg2_idx];
+            let sign2 = if seg2.end_idx != dip.junction_idx { 1.0 } else { -1.0 };
+            process_seg(seg2, sign2);
+        }
     }
 
     let mut u_grid = vec![0.0; thetas.len() * phis.len()];
 
-    // 2. Compute Far-Field Grid in Parallel
     u_grid.par_iter_mut().enumerate().for_each(|(idx, u_val)| {
         let t_idx = idx / phis.len();
-        let p_idx = idx % phis.len();
         let theta = thetas[t_idx];
-        let phi = phis[p_idx];
+        let phi = phis[idx % phis.len()];
 
-        let st = theta.sin();
-        let ct = theta.cos();
-        let sp = phi.sin();
-        let cp = phi.cos();
+        // 3. Mask the lower hemisphere if grounded
+        if has_ground && theta >= (PI / 2.0) {
+            *u_val = 0.0;
+            return; // Skip integration completely
+        }
 
-        // Spherical unit vectors mapped to Cartesian
+        let (st, ct) = theta.sin_cos();
+        let (sp, cp) = phi.sin_cos();
+
         let r_hat = [st * cp, st * sp, ct];
         let theta_hat = [ct * cp, ct * sp, -st];
         let phi_hat = [-sp, cp, 0.0];
 
         let mut n_vec = [Complex64::new(0.0, 0.0); 3];
 
-        // Sum the phase-shifted moments
         for rad in &radiators {
             let phase = k * (r_hat[0] * rad.center[0] + r_hat[1] * rad.center[1] + r_hat[2] * rad.center[2]);
             let phase_cplx = Complex64::new(0.0, phase).exp();
@@ -105,14 +125,10 @@ pub fn compute_pattern(
             n_vec[2] += rad.moment[2] * phase_cplx;
         }
 
-        // Project onto transverse observation plane
         let n_theta = n_vec[0] * theta_hat[0] + n_vec[1] * theta_hat[1] + n_vec[2] * theta_hat[2];
         let n_phi = n_vec[0] * phi_hat[0] + n_vec[1] * phi_hat[1] + n_vec[2] * phi_hat[2];
-
-        let n_trans_sq = n_theta.norm_sqr() + n_phi.norm_sqr();
         
-        // Radiation Intensity U(theta, phi) in Watts/steradian
-        *u_val = (k * k * eta / (32.0 * PI * PI)) * n_trans_sq;
+        *u_val = (k * k * eta / (32.0 * PI * PI)) * (n_theta.norm_sqr() + n_phi.norm_sqr());
     });
 
     u_grid
