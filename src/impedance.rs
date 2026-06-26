@@ -46,13 +46,6 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
             let z23 = monopole_mutual(seg2_i, seg1_j, &mesh.nodes, k, dip_i.mbc_offset, dip_j.mbc_offset, junc_i_seg2_is_end, junc_j_seg1_is_end);
             let z24 = monopole_mutual(seg2_i, seg2_j, &mesh.nodes, k, dip_i.mbc_offset, dip_j.mbc_offset, junc_i_seg2_is_end, junc_j_seg2_is_end);
 
-            if false {
-                println!("[{},{}] z13: {} Ohms", i, j, z13);
-                println!("[{},{}] z14: {} Ohms", i, j, z14);
-                println!("[{},{}] z23: {} Ohms", i, j, z23);
-                println!("[{},{}] z24: {} Ohms", i, j, z24);
-            }
-
             // Apply the directional signs to the matrix sum
             *z_val = Complex64::new(sign1_i * sign1_j, 0.0) * z13 +
                      Complex64::new(sign1_i * sign2_j, 0.0) * z14 +
