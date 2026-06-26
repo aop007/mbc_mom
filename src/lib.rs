@@ -4,6 +4,7 @@ use num_complex::Complex64;
 mod geometry;
 mod impedance;
 mod farfield;
+mod sommerfeld;
 pub mod expj;
 
 use geometry::{Mesh};
