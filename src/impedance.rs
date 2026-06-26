@@ -11,43 +11,39 @@ struct SubSegment {
     radius: f64,
     sign: f64,
     junc_is_p2: bool,
-    weight: Complex64,
+    is_image: bool
 }
 
 /// Generates the mathematical sub-segments (physical and virtual) for a given dipole.
-fn get_subsegments(dip: &Dipole, mesh: &Mesh, is_source: bool, gamma: Complex64) -> Vec<SubSegment> {
+fn get_subsegments(dip: &Dipole, mesh: &Mesh, is_source: bool, has_ground: bool) -> Vec<SubSegment> {
     let mut subs = Vec::new();
     
-    // Segment 1 (Always physical)
     let seg1 = &mesh.segments[dip.seg1_idx];
     let n1_start = &mesh.nodes[seg1.start_idx];
     let n1_end = &mesh.nodes[seg1.end_idx];
     let junc_is_end1 = seg1.end_idx == dip.junction_idx;
     let sign1 = if junc_is_end1 { 1.0 } else { -1.0 };
     
-    // Testing Segment: Only physical space
     subs.push(SubSegment {
         p1: [n1_start.x, n1_start.y, n1_start.z],
         p2: [n1_end.x, n1_end.y, n1_end.z],
         radius: seg1.radius,
         sign: sign1,
         junc_is_p2: junc_is_end1,
-        weight: Complex64::new(1.0, 0.0),
+        is_image: false,
     });
 
-    // Source Segment: Image radiates into physical space
-    if is_source && gamma != Complex64::new(0.0, 0.0) {
+    if is_source && has_ground {
         subs.push(SubSegment {
             p1: [n1_start.x, n1_start.y, -n1_start.z],
             p2: [n1_end.x, n1_end.y, -n1_end.z],
             radius: seg1.radius,
             sign: sign1,
             junc_is_p2: junc_is_end1,
-            weight: gamma,
+            is_image: true,
         });
     }
     
-    // If it's a standard dipole, process the second half
     if !dip.is_monopole {
         let seg2 = &mesh.segments[dip.seg2_idx];
         let n2_start = &mesh.nodes[seg2.start_idx];
@@ -61,21 +57,20 @@ fn get_subsegments(dip: &Dipole, mesh: &Mesh, is_source: bool, gamma: Complex64)
             radius: seg2.radius,
             sign: sign2,
             junc_is_p2: junc_is_end2,
-            weight: Complex64::new(1.0, 0.0),
+            is_image: false,
         });
         
-        if is_source && gamma != Complex64::new(0.0, 0.0) {
+        if is_source && has_ground {
             subs.push(SubSegment {
                 p1: [n2_start.x, n2_start.y, -n2_start.z],
                 p2: [n2_end.x, n2_end.y, -n2_end.z],
                 radius: seg2.radius,
                 sign: sign2,
                 junc_is_p2: junc_is_end2,
-                weight: gamma,
+                is_image: true,
             });
         }
     }
-    
     subs
 }
 
@@ -86,21 +81,16 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
 
     // Free-space wavenumber k = 2 * pi * f / c
     let k = (2.0 * PI * frequency_hz) / 299_792_458.0;
-
     let has_ground = mesh.ground_plane.is_some();
-    let is_pec = mesh.ground_plane.as_ref().map_or(false, |g| g.is_pec);
-
-    let gamma = if has_ground {
-        if is_pec {
-            Complex64::new(-1.0, 0.0) // Perfect Electric Conductor
-        } else {
-            // TODO: RCA / Sommerfeld integration for Dielectric Ground.
-            // Placeholder: Default to PEC for stability until RCA is implemented.
-            Complex64::new(-1.0, 0.0) 
-        }
+    let (is_pec, eps_r, sigma) = if let Some(g) = &mesh.ground_plane {
+        (g.is_pec, g.eps_r, g.sigma)
     } else {
-        Complex64::new(0.0, 0.0) // Free Space
+        (false, 1.0, 0.0)
     };
+
+    let eps_0 = 8.8541878128e-12;
+    let omega = 2.0 * PI * frequency_hz;
+    let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
 
     z_matrix.par_iter_mut().enumerate().for_each(|(idx, z_val)| {
         let i = idx / n;
@@ -110,24 +100,54 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
             let dip_i = &mesh.dipoles[i];
             let dip_j = &mesh.dipoles[j];
 
-            // Testing segments (Physical wire only)
-            let subs_i = get_subsegments(dip_i, mesh, false, gamma);
-            // Source segments (Physical wire + Ground Images)
-            let subs_j = get_subsegments(dip_j, mesh, true, gamma);
+            let subs_i = get_subsegments(dip_i, mesh, false, has_ground);
+            let subs_j = get_subsegments(dip_j, mesh, true, has_ground);
 
             let mut z_ij = Complex64::new(0.0, 0.0);
 
-            // Dynamically calculate the cross-coupling between all physical and virtual segments
             for sub_i in &subs_i {
                 for sub_j in &subs_j {
                     let mut_z = monopole_mutual(sub_i, sub_j, k);
-                    
-                    // Multiply by KCL signs and the image reflection weight
-                    let total_weight = Complex64::new(sub_i.sign * sub_j.sign, 0.0) * sub_j.weight;
+                    let mut total_weight = Complex64::new(sub_i.sign * sub_j.sign, 0.0);
+
+                    // --- NEW: Near-Field RCA ---
+                    if sub_j.is_image {
+                        let cx_i = (sub_i.p1[0] + sub_i.p2[0]) / 2.0;
+                        let cy_i = (sub_i.p1[1] + sub_i.p2[1]) / 2.0;
+                        let cz_i = (sub_i.p1[2] + sub_i.p2[2]) / 2.0;
+
+                        let cx_j = (sub_j.p1[0] + sub_j.p2[0]) / 2.0;
+                        let cy_j = (sub_j.p1[1] + sub_j.p2[1]) / 2.0;
+                        let cz_j = (sub_j.p1[2] + sub_j.p2[2]) / 2.0;
+
+                        let dx = cx_i - cx_j;
+                        let dy = cy_i - cy_j;
+                        let dz = cz_i - cz_j; // Since j is an image, cz_j is negative
+                        let r = (dx*dx + dy*dy + dz*dz).sqrt();
+
+                        let gamma = if is_pec {
+                            Complex64::new(-1.0, 0.0)
+                        } else {
+                            let cost = if r == 0.0 { 1.0 } else { (dz / r).abs() };
+                            let sint_sq = 1.0 - cost * cost;
+                            
+                            let cost_cplx = Complex64::new(cost, 0.0);
+                            let sint_sq_cplx = Complex64::new(sint_sq, 0.0);
+                            let root = (eps_c - sint_sq_cplx).sqrt();
+                            
+                            // Calculate TM (Vertical) Reflection Coefficient
+                            let g_v = (eps_c * cost_cplx - root) / (eps_c * cost_cplx + root);
+                            
+                            // We use -g_v as the scalar to correctly map to our Z-flipped geometry.
+                            // This ensures vertical currents are correctly scaled by +g_v.
+                            -g_v 
+                        };
+                        total_weight *= gamma;
+                    }
+
                     z_ij += total_weight * mut_z;
                 }
             }
-
             *z_val = z_ij;
         }
     });
