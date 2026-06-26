@@ -1,5 +1,7 @@
 use num_complex::Complex64;
 use std::f64::consts::PI;
+use rayon::prelude::*;
+
 
 /// Holds the pre-calculated physical constants for the ground environment
 #[derive(Clone, Copy, Debug)]
@@ -177,5 +179,84 @@ pub fn j0(x: f64) -> f64 {
             + 0.00013558 * y.powi(6);
             
         return f0 * theta0.cos() / ax.sqrt();
+    }
+}
+
+/// A highly optimized 2D Lookup Table for Sommerfeld Integrals.
+/// Uses logarithmic spacing for both radial distance (rho) and height (z_sum).
+#[derive(Clone)]
+pub struct SommerfeldTable {
+    rho_min: f64,
+    rho_max: f64,
+    z_min: f64,
+    z_max: f64,
+    rho_pts: usize,
+    z_pts: usize,
+    grid: Vec<Complex64>,
+}
+
+impl SommerfeldTable {
+    /// Pre-computes the Sommerfeld integrals over a 2D logarithmic grid.
+    pub fn generate(physics: &GroundPhysics) -> Self {
+        let rho_min = 1e-4;   // 0.1 mm (Near-field safety limit)
+        let rho_max = 1000.0; // 1 km (Far-field limit)
+        let z_min = 1e-4;     // 0.1 mm
+        let z_max = 1000.0;
+        
+        let rho_pts = 100;
+        let z_pts = 100;
+
+        let get_val = |min: f64, max: f64, pts: usize, i: usize| -> f64 {
+            let log_min = min.ln();
+            let log_max = max.ln();
+            let frac = i as f64 / (pts - 1) as f64;
+            (log_min + frac * (log_max - log_min)).exp()
+        };
+
+        let mut grid = vec![Complex64::new(0.0, 0.0); rho_pts * z_pts];
+
+        // Fire up all CPU cores to crunch the 10,000 complex contour integrals!
+        grid.par_iter_mut().enumerate().for_each(|(idx, val)| {
+            let r_idx = idx / z_pts;
+            let z_idx = idx % z_pts;
+            
+            let rho = get_val(rho_min, rho_max, rho_pts, r_idx);
+            let z_sum = get_val(z_min, z_max, z_pts, z_idx);
+            
+            *val = physics.evaluate_tm(rho, z_sum);
+        });
+
+        Self { rho_min, rho_max, z_min, z_max, rho_pts, z_pts, grid }
+    }
+
+    /// Performs a fast 2D Bilinear Interpolation on the logarithmic grid.
+    pub fn interpolate(&self, mut rho: f64, mut z_sum: f64) -> Complex64 {
+        // Enforce safety limits to prevent out-of-bounds indexing or singularity blowups
+        rho = rho.clamp(self.rho_min, self.rho_max);
+        z_sum = z_sum.clamp(self.z_min, self.z_max);
+
+        // Convert the requested physical coordinates to grid indices
+        let r_frac = (rho.ln() - self.rho_min.ln()) / (self.rho_max.ln() - self.rho_min.ln()) * (self.rho_pts - 1) as f64;
+        let z_frac = (z_sum.ln() - self.z_min.ln()) / (self.z_max.ln() - self.z_min.ln()) * (self.z_pts - 1) as f64;
+
+        let r0 = (r_frac.floor() as usize).min(self.rho_pts - 2);
+        let r1 = r0 + 1;
+        let z0 = (z_frac.floor() as usize).min(self.z_pts - 2);
+        let z1 = z0 + 1;
+
+        let dr = r_frac - r0 as f64;
+        let dz = z_frac - z0 as f64;
+
+        // Retrieve the 4 surrounding points from the flattened 1D array
+        let v00 = self.grid[r0 * self.z_pts + z0];
+        let v10 = self.grid[r1 * self.z_pts + z0];
+        let v01 = self.grid[r0 * self.z_pts + z1];
+        let v11 = self.grid[r1 * self.z_pts + z1];
+
+        // Bilinear blend in complex space
+        let c0 = v00 * (1.0 - dr) + v10 * dr;
+        let c1 = v01 * (1.0 - dr) + v11 * dr;
+        
+        c0 * (1.0 - dz) + c1 * dz
     }
 }
