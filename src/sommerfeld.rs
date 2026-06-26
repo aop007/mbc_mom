@@ -6,7 +6,6 @@ use rayon::prelude::*;
 /// Holds the pre-calculated physical constants for the ground environment
 #[derive(Clone, Copy, Debug)]
 pub struct GroundPhysics {
-    pub freq_hz: f64,
     pub k0: f64,              // Wavenumber in free space
     pub eps_c: Complex64,     // Complex relative permittivity of the ground
     pub k1: Complex64,        // Wavenumber in the ground
@@ -29,7 +28,7 @@ impl GroundPhysics {
         let eps_plus_1 = eps_c + Complex64::new(1.0, 0.0);
         let pole = Complex64::new(k0, 0.0) * (eps_c / eps_plus_1).sqrt();
         
-        Self { freq_hz, k0, eps_c, k1, pole }
+        Self { k0, eps_c, k1, pole }
     }
 
     /// Evaluates the integration variable lambda along an elliptical contour.
