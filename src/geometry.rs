@@ -74,13 +74,15 @@ pub struct Dipole {
     pub junction_idx: usize,
     #[pyo3(get)]
     pub mbc_offset: f64,
+    #[pyo3(get)]
+    pub is_monopole: bool,
 }
 
 #[pymethods]
 impl Dipole {
     #[new]
-    pub fn new(seg1_idx: usize, seg2_idx: usize, junction_idx: usize, mbc_offset: f64) -> Self {
-        Dipole { seg1_idx, seg2_idx, junction_idx, mbc_offset }
+    pub fn new(seg1_idx: usize, seg2_idx: usize, junction_idx: usize, mbc_offset: f64, is_monopole: bool) -> Self {
+        Dipole { seg1_idx, seg2_idx, junction_idx, mbc_offset, is_monopole }
     }
 }
 
@@ -134,31 +136,66 @@ impl Mesh {
     /// Automatically scans the topology and builds N-1 dipoles for every N-way junction.
     pub fn build_dipoles(&mut self) {
         self.dipoles.clear();
+        let mut dipoles = Vec::new();
+        let has_ground = self.ground_plane.is_some();
         
-        // Map each node index to a list of connected segment indices
-        let mut connections: HashMap<usize, Vec<usize>> = HashMap::new();
-        for (i, seg) in self.segments.iter().enumerate() {
-            connections.entry(seg.start_idx).or_default().push(i);
-            connections.entry(seg.end_idx).or_default().push(i);
-        }
+        // 1. Standard Two-Segment Dipoles
+        for i in 0..self.segments.len() {
+            for j in (i + 1)..self.segments.len() {
+                let s1 = &self.segments[i];
+                let s2 = &self.segments[j];
 
-        // Generate the dipoles
-        for (&node_idx, segs) in connections.iter() {
-            if segs.len() >= 2 {
-                let base_seg_idx = segs[0];
-                let r_base = self.segments[base_seg_idx].radius;
-                
-                // Form a dipole between the base segment and every other connected segment
-                for &other_seg_idx in segs.iter().skip(1) {
-                    let r_other = self.segments[other_seg_idx].radius;
-                    
-                    // MBC Rule: Offset is the maximum of the two segment radii
-                    let offset = r_base.max(r_other);
-                    
-                    self.dipoles.push(Dipole::new(base_seg_idx, other_seg_idx, node_idx, offset));
+                let junction = if s1.start_idx == s2.start_idx || s1.start_idx == s2.end_idx {
+                    Some(s1.start_idx)
+                } else if s1.end_idx == s2.start_idx || s1.end_idx == s2.end_idx {
+                    Some(s1.end_idx)
+                } else {
+                    None
+                };
+
+                if let Some(j_idx) = junction {
+                    let mbc_offset = s1.radius.max(s2.radius);
+                    dipoles.push(Dipole {
+                        seg1_idx: i,
+                        seg2_idx: j,
+                        junction_idx: j_idx,
+                        mbc_offset,
+                        is_monopole: false,
+                    });
                 }
             }
         }
+
+        // 2. Monopole Dipoles (Grounded Segments)
+        if has_ground {
+            for i in 0..self.segments.len() {
+                let s = &self.segments[i];
+                let n_start = &self.nodes[s.start_idx];
+                let n_end = &self.nodes[s.end_idx];
+
+                // If a node touches the z=0 plane (within a tiny floating-point tolerance)
+                let tol = 1e-12;
+                let (is_grounded, j_idx) = if n_start.z.abs() < tol {
+                    (true, s.start_idx)
+                } else if n_end.z.abs() < tol {
+                    (true, s.end_idx)
+                } else {
+                    (false, 0)
+                };
+
+                if is_grounded {
+                    dipoles.push(Dipole {
+                        seg1_idx: i,
+                        seg2_idx: i, // Placeholder: Monopoles only have one physical segment
+                        junction_idx: j_idx,
+                        mbc_offset: s.radius, // Image has the exact same radius
+                        is_monopole: true,
+                    });
+                }
+            }
+        }
+
+        self.dipoles = dipoles;
     }
 
     /// Sets the environment to a Perfectly Electric Conducting (PEC) half-space

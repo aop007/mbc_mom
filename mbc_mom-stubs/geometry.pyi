@@ -20,6 +20,7 @@ class Dipole:
     seg2_idx: int
     junction_idx: int
     mbc_offset: float
+    is_monopole: bool
     def __init__(self, seg1_idx: int, seg2_idx: int, junction_idx: int, mbc_offset: float) -> None: ...
     
 class GroundPlane:
