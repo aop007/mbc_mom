@@ -13,10 +13,21 @@ def build_monopole(mesh: Mesh, num_segments: int, height_m: float = 0.25):
         mesh.add_segment(Segment(nodes[i], nodes[i+1], 0.0001))
     return nodes[0]
 
-def main():
-    print("--- Far-Field Pattern: Monopole over PEC Ground ---")
+def main(use_pec: bool = False, use_dry_gnd: bool = False, use_saltwater: bool = False):
     mesh = Mesh()
-    mesh.set_pec_ground() # Turn on the ground!
+
+    if use_pec:
+        print("--- Far-Field Pattern: Monopole over PEC Ground ---")
+        mesh.set_pec_ground() # Turn on the ground!
+    elif use_dry_gnd:
+        print("--- Far-Field Pattern: Monopole over Dry Ground Water ---")
+        mesh.set_real_ground(sigma=0.001, eps_r=3.0, use_sommerfeld=False)
+    elif use_saltwater:
+        print("--- Far-Field Pattern: Monopole over Salt Ground ---")
+        mesh.set_real_ground(sigma=5.0, eps_r=81.0, use_sommerfeld=False)
+    else:
+        print("--- Far-Field Pattern: Monopole over Void ---")
+    # end if
     
     driven_node_idx = build_monopole(mesh, 15, height_m=0.25)
     mesh.build_dipoles()
@@ -74,4 +85,6 @@ def main():
     plt.show()
 
 if __name__ == "__main__":
-    main()
+    main(use_pec=True)
+    main(use_dry_gnd=True)
+    main(use_saltwater=True)

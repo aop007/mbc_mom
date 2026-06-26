@@ -4,7 +4,6 @@ use std::f64::consts::PI;
 
 use crate::geometry::{Mesh, Segment};
 
-/// Computes the Radiation Intensity U(theta, phi) over a grid of angles.
 pub fn compute_pattern(
     mesh: &Mesh,
     currents: Vec<Complex64>,
@@ -13,80 +12,54 @@ pub fn compute_pattern(
     phis: Vec<f64>,
 ) -> Vec<f64> {
     let k = (2.0 * PI * freq_hz) / 299_792_458.0;
-    let eta = 376.7303; // Free-space impedance
+    let eta = 376.7303;
 
+    // 1. Extract Ground Parameters
     let has_ground = mesh.ground_plane.is_some();
-    // Default to PEC (-1.0 reflection) for now. RCA will go here later!
-    let gamma = if has_ground { Complex64::new(-1.0, 0.0) } else { Complex64::new(0.0, 0.0) };
+    let (is_pec, eps_r, sigma) = if let Some(g) = &mesh.ground_plane {
+        (g.is_pec, g.eps_r, g.sigma)
+    } else {
+        (false, 1.0, 0.0)
+    };
 
-    // 1. Precompute the exact vector moment of every radiating segment
+    // Calculate Complex Permittivity
+    let eps_0 = 8.8541878128e-12;
+    let omega = 2.0 * PI * freq_hz;
+    let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
+
+    println!("eps_c: {eps_c}");
+
     struct Radiator {
         center: [f64; 3],
         moment: [Complex64; 3],
     }
     let mut radiators = Vec::new();
 
+    // 2. Precompute ONLY Physical Radiators
     for (i, dip) in mesh.dipoles.iter().enumerate() {
         let i_dip = currents[i];
         let seg1 = &mesh.segments[dip.seg1_idx];
-
-        let junc_seg1_is_end = seg1.end_idx == dip.junction_idx;
+        let sign1 = if seg1.end_idx == dip.junction_idx { 1.0 } else { -1.0 };
 
         let mut process_seg = |seg: &Segment, sign: f64| {
             let start = &mesh.nodes[seg.start_idx];
             let end = &mesh.nodes[seg.end_idx];
             
-            // Midpoint phase center approximation for electrically short segments
-            let center = [
-                (start.x + end.x) / 2.0,
-                (start.y + end.y) / 2.0,
-                (start.z + end.z) / 2.0,
-            ];
-            
+            let center = [(start.x + end.x) / 2.0, (start.y + end.y) / 2.0, (start.z + end.z) / 2.0];
             let len = seg.length(&mesh.nodes);
-            let u = [
-                (end.x - start.x) / len,
-                (end.y - start.y) / len,
-                (end.z - start.z) / len,
-            ];
+            let u = [(end.x - start.x) / len, (end.y - start.y) / len, (end.z - start.z) / len];
 
-            // Exact integral of the PWS current shape over the segment
             let kl = k * len;
-            let q = if kl < 1e-5 {
-                len / 2.0 // Taylor expansion limit for extreme thin/short wires
-            } else {
-                (1.0 - kl.cos()) / (k * kl.sin())
-            };
-
+            let q = if kl < 1e-5 { len / 2.0 } else { (1.0 - kl.cos()) / (k * kl.sin()) };
             let moment_mag = i_dip * Complex64::new(sign * q, 0.0);
-            let moment = [
-                moment_mag * u[0],
-                moment_mag * u[1],
-                moment_mag * u[2],
-            ];
-
-            radiators.push(Radiator { center, moment });
-
-            // 2. Virtual Image Radiator
-            if has_ground && gamma != Complex64::new(0.0, 0.0) {
-                let center_img = [center[0], center[1], -center[2]];
-                let u_img = [u[0], u[1], -u[2]]; // The physical Z-vector flips underground
-                
-                // Image moment = Gamma * Mag * U_img
-                let moment_img = [
-                    gamma * moment_mag * u_img[0],
-                    gamma * moment_mag * u_img[1],
-                    gamma * moment_mag * u_img[2],
-                ];
-                radiators.push(Radiator { center: center_img, moment: moment_img });
-            }
+            
+            radiators.push(Radiator {
+                center,
+                moment: [moment_mag * u[0], moment_mag * u[1], moment_mag * u[2]],
+            });
         };
-        
-        // KCL Flow exactly as defined in impedance.rs
-        let sign1 = if junc_seg1_is_end { 1.0 } else { -1.0 };
 
         process_seg(seg1, sign1);
-        
         if !dip.is_monopole {
             let seg2 = &mesh.segments[dip.seg2_idx];
             let sign2 = if seg2.end_idx != dip.junction_idx { 1.0 } else { -1.0 };
@@ -96,15 +69,16 @@ pub fn compute_pattern(
 
     let mut u_grid = vec![0.0; thetas.len() * phis.len()];
 
+    // 3. Compute Grid with Fresnel Reflection
     u_grid.par_iter_mut().enumerate().for_each(|(idx, u_val)| {
         let t_idx = idx / phis.len();
         let theta = thetas[t_idx];
         let phi = phis[idx % phis.len()];
 
-        // 3. Mask the lower hemisphere if grounded
+        // Mask underground radiation
         if has_ground && theta >= (PI / 2.0) {
             *u_val = 0.0;
-            return; // Skip integration completely
+            return;
         }
 
         let (st, ct) = theta.sin_cos();
@@ -114,21 +88,52 @@ pub fn compute_pattern(
         let theta_hat = [ct * cp, ct * sp, -st];
         let phi_hat = [-sp, cp, 0.0];
 
-        let mut n_vec = [Complex64::new(0.0, 0.0); 3];
+        // Evaluate Fresnel Coefficients for this specific elevation angle
+        let (gamma_v, gamma_h) = if has_ground {
+            if is_pec {
+                (Complex64::new(1.0, 0.0), Complex64::new(-1.0, 0.0))
+            } else {
+                let cost = Complex64::new(ct, 0.0);
+                let sint_sq = Complex64::new(st * st, 0.0);
+                let root = (eps_c - sint_sq).sqrt();
+                
+                let g_v = (eps_c * cost - root) / (eps_c * cost + root);
+                let g_h = (cost - root) / (cost + root);
+                (g_v, g_h)
+            }
+        } else {
+            (Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0))
+        };
+
+        let mut n_theta_total = Complex64::new(0.0, 0.0);
+        let mut n_phi_total = Complex64::new(0.0, 0.0);
 
         for rad in &radiators {
-            let phase = k * (r_hat[0] * rad.center[0] + r_hat[1] * rad.center[1] + r_hat[2] * rad.center[2]);
-            let phase_cplx = Complex64::new(0.0, phase).exp();
+            // Direct Ray
+            let phase_dir = k * (r_hat[0] * rad.center[0] + r_hat[1] * rad.center[1] + r_hat[2] * rad.center[2]);
+            let exp_dir = Complex64::new(0.0, phase_dir).exp();
+            
+            let e_theta_dir = (rad.moment[0] * theta_hat[0] + rad.moment[1] * theta_hat[1] + rad.moment[2] * theta_hat[2]) * exp_dir;
+            let e_phi_dir = (rad.moment[0] * phi_hat[0] + rad.moment[1] * phi_hat[1] + rad.moment[2] * phi_hat[2]) * exp_dir;
 
-            n_vec[0] += rad.moment[0] * phase_cplx;
-            n_vec[1] += rad.moment[1] * phase_cplx;
-            n_vec[2] += rad.moment[2] * phase_cplx;
+            // Reflected Ray (Phase shifted to the underground image location)
+            let mut e_theta_ref = Complex64::new(0.0, 0.0);
+            let mut e_phi_ref = Complex64::new(0.0, 0.0);
+
+            if has_ground {
+                let phase_ref = k * (r_hat[0] * rad.center[0] + r_hat[1] * rad.center[1] + r_hat[2] * (-rad.center[2]));
+                let exp_ref = Complex64::new(0.0, phase_ref).exp();
+                
+                e_theta_ref = (rad.moment[0] * theta_hat[0] + rad.moment[1] * theta_hat[1] + rad.moment[2] * theta_hat[2]) * exp_ref;
+                e_phi_ref = (rad.moment[0] * phi_hat[0] + rad.moment[1] * phi_hat[1] + rad.moment[2] * phi_hat[2]) * exp_ref;
+            }
+
+            // Superposition: Direct + (Reflected * Gamma)
+            n_theta_total += e_theta_dir + (e_theta_ref * gamma_v);
+            n_phi_total += e_phi_dir + (e_phi_ref * gamma_h);
         }
 
-        let n_theta = n_vec[0] * theta_hat[0] + n_vec[1] * theta_hat[1] + n_vec[2] * theta_hat[2];
-        let n_phi = n_vec[0] * phi_hat[0] + n_vec[1] * phi_hat[1] + n_vec[2] * phi_hat[2];
-        
-        *u_val = (k * k * eta / (32.0 * PI * PI)) * (n_theta.norm_sqr() + n_phi.norm_sqr());
+        *u_val = (k * k * eta / (32.0 * PI * PI)) * (n_theta_total.norm_sqr() + n_phi_total.norm_sqr());
     });
 
     u_grid
