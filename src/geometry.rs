@@ -1,5 +1,4 @@
 use pyo3::prelude::*;
-use std::collections::HashMap;
 
 /// Represents a 3D coordinate in space.
 #[pyclass(from_py_object)]
@@ -86,7 +85,7 @@ impl Dipole {
     }
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone, Debug)]
 pub struct GroundPlane {
     #[pyo3(get)]
