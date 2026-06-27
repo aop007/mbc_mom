@@ -18,3 +18,17 @@ def compute_near_field(
     ys: List[float], 
     zs: List[float]
 ) -> Tuple[List[complex], List[complex], List[complex], List[complex], List[complex], List[complex]]: ...
+
+def get_incident_eval_points(
+    mesh: geometry.Mesh, 
+    points_per_seg: int = 7
+) -> Tuple[List[float], List[float], List[float]]: ...
+
+def compute_incident_v_matrix(
+    mesh: geometry.Mesh,
+    freq_hz: float,
+    ex: List[complex],
+    ey: List[complex],
+    ez: List[complex],
+    points_per_seg: int = 7
+) -> List[complex]: ...
