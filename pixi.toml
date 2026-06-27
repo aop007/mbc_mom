@@ -24,6 +24,9 @@ uv = ">=0.11.24,<0.12"
 mypy = ">=2.1.0,<3"
 scipy = ">=1.18.0,<2"
 tabulate = ">=0.10.0,<0.11"
+sphinx = ">=8.2.3,<9"
+sphinx-rtd-theme = ">=3.1.0,<4"
+myst-parser = ">=5.1.0,<6"
 
 [pypi-dependencies]
 # We tell pixi to install our local directory in editable mode
