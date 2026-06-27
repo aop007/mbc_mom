@@ -102,6 +102,16 @@ def run_analysis(num_segments: int, feed_type: str):
     mesh.build_dipoles()
     N = len(mesh.dipoles)
     
+    warnings = mesh.validate(freq_hz)
+    if warnings:
+        print("⚠️ Mesh Validation Warnings:")
+        for w in warnings:
+            print(f"  - {w}")
+        # end for
+        print("⚠️ *************************")
+        
+    # end if
+    
     flat_z = compute_impedance_matrix(mesh, freq_hz)
     Z = np.array(flat_z).reshape((N, N))
 

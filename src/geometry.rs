@@ -216,6 +216,66 @@ impl Mesh {
             use_sommerfeld,
         });
     }
+
+    /// Validates the mesh against the fundamental physics limits of the MoM solver.
+    /// Returns a list of human-readable warning strings. If empty, the mesh is pristine.
+    pub fn validate(&self, freq_hz: f64) -> Vec<String> {
+        let mut warnings = Vec::new();
+        let lambda = 299_792_458.0 / freq_hz;
+
+        // 1. Segment-Level Checks
+        for (i, seg) in self.segments.iter().enumerate() {
+            let start = &self.nodes[seg.start_idx];
+            let end = &self.nodes[seg.end_idx];
+            let dx = end.x - start.x;
+            let dy = end.y - start.y;
+            let dz = end.z - start.z;
+            let length = (dx*dx + dy*dy + dz*dz).sqrt();
+            let radius = seg.radius;
+
+            // Length bounds (The Sinusoidal Limit)
+            if length > 0.251 * lambda {
+                warnings.push(format!(
+                    "Segment {} is too long ({:.5} λ). Length must be < 0.25 λ (preferably < 0.1 λ).",
+                    i, length / lambda
+                ));
+            }
+            
+            // Thin-wire approximation bounds
+            if radius > 0.01 * lambda {
+                warnings.push(format!(
+                    "Segment {} is too thick (radius = {:.4} λ). Thin-wire approximation requires radius < 0.01 λ.",
+                    i, radius / lambda
+                ));
+            }
+
+            // Aspect ratio bound (Pancake limit)
+            if length < 2.0 * radius {
+                warnings.push(format!(
+                    "Segment {} is shorter than its diameter (Length = {:.4} m, Radius = {:.4} m). 1D kernel will degrade.",
+                    i, length, radius
+                ));
+            }
+        }
+
+        // 2. Dipole Junction Checks
+        for (i, dip) in self.dipoles.iter().enumerate() {
+            if !dip.is_monopole {
+                let r1 = self.segments[dip.seg1_idx].radius;
+                let r2 = self.segments[dip.seg2_idx].radius;
+                
+                let ratio = if r1 > r2 { r1 / r2 } else { r2 / r1 };
+                if ratio > 10.0 {
+                    warnings.push(format!(
+                        "Dipole {} has a severe radius step at the junction (ratio {:.1}:1). Unmodeled junction capacitance may occur.",
+                        i, ratio
+                    ));
+                }
+            }
+        }
+
+        warnings
+    }
 }
 
 /// A Python module implemented in Rust using the modern Bound API.
