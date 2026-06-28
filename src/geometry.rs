@@ -236,7 +236,7 @@ impl Mesh {
             let radius = seg.radius;
 
             // Length bounds (The Sinusoidal Limit)
-            if length > 0.251 * lambda {
+            if length > 0.25 * lambda {
                 warnings.push(format!(
                     "Segment {} is too long ({:.5} λ). Length must be < 0.25 λ (preferably < 0.1 λ).",
                     i, length / lambda
