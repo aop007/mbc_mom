@@ -8,8 +8,7 @@ pub fn compute_pattern(
     mesh: &Mesh,
     currents: Vec<Complex64>,
     freq_hz: f64,
-    thetas: Vec<f64>,
-    phis: Vec<f64>,
+    thetas_phis: Vec<(f64, f64)>,
 ) -> Vec<f64> {
     let k = (2.0 * PI * freq_hz) / 299_792_458.0;
     let eta = 376.7303;
@@ -26,8 +25,6 @@ pub fn compute_pattern(
     let eps_0 = 8.8541878128e-12;
     let omega = 2.0 * PI * freq_hz;
     let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
-
-    println!("eps_c: {eps_c}");
 
     struct Radiator {
         center: [f64; 3],
@@ -67,13 +64,12 @@ pub fn compute_pattern(
         }
     }
 
-    let mut u_grid = vec![0.0; thetas.len() * phis.len()];
+    let mut u_grid = vec![0.0; thetas_phis.len()];
 
     // 3. Compute Grid with Fresnel Reflection
     u_grid.par_iter_mut().enumerate().for_each(|(idx, u_val)| {
-        let t_idx = idx / phis.len();
-        let theta = thetas[t_idx];
-        let phi = phis[idx % phis.len()];
+        let theta = thetas_phis[idx].0;
+        let phi = thetas_phis[idx].1;
 
         // Mask underground radiation
         if has_ground && theta >= (PI / 2.0) {

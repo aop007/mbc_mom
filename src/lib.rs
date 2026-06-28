@@ -23,8 +23,8 @@ pub fn compute_impedance_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64
 }
 
 #[pyfunction]
-pub fn compute_far_field(mesh: &Mesh, currents: Vec<Complex64>, freq_hz: f64, thetas: Vec<f64>, phis: Vec<f64>) -> Vec<f64> {
-    farfield::compute_pattern(mesh, currents, freq_hz, thetas, phis)
+pub fn compute_far_field(mesh: &Mesh, currents: Vec<Complex64>, freq_hz: f64, thetas_phis: Vec<(f64, f64)>) -> Vec<f64> {
+    farfield::compute_pattern(mesh, currents, freq_hz, thetas_phis)
 }
 
 #[pyfunction]

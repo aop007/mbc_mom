@@ -12,7 +12,7 @@ When ``Mesh.set_pec_ground()`` is invoked, the solver uses classical Image Theor
 
    G(\vec{r}, \vec{r}') = \frac{e^{-jkR_1}}{R_1} \pm \frac{e^{-jkR_2}}{R_2}
 
-Where :math:`R_1`` is the distance to the source, and :math:`R_2`` is the distance to its virtual image.
+Where :math:`R_1` is the distance to the source, and :math:`R_2` is the distance to its virtual image.
 
 Reflection Coefficient Approximation (RCA)
 ------------------------------------------
@@ -23,7 +23,7 @@ For real ground, RCA provides a fast approximation by scaling the image contribu
 
    G(\vec{r}, \vec{r}') \approx \frac{e^{-jkR_1}}{R_1} + \Gamma(\theta) \frac{e^{-jkR_2}}{R_2}
 
-This is computationally cheap and highly accurate for antennas elevated at least $0.2\lambda$ above the ground, but fails for buried wires or surface-hugging structures.
+This is computationally cheap and highly accurate for antennas elevated at least :math:`0.2\lambda` above the ground, but fails for buried wires or surface-hugging structures.
 
 Exact Sommerfeld-Norton Surface Waves
 -------------------------------------

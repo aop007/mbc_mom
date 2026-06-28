@@ -19,6 +19,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
+    'matplotlib.sphinxext.plot_directive'
 ]
 
 templates_path = ['_templates']
@@ -26,6 +27,10 @@ exclude_patterns = []
 
 # Ensure autodoc looks at the type hints in your .pyi files
 autodoc_typehints = "description"
+
+plot_include_source = True
+plot_html_show_source_link = False
+plot_html_show_formats = False
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

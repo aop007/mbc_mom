@@ -6,15 +6,11 @@ Installation
 Prerequisites
 -------------
 
-Since the core engine is written in Rust and wrapped in Python, you will need both toolchains. This guide assumes you are developing on a Linux environment (such as WSL Ubuntu 24).
+Since the core engine is written in Rust and wrapped in Python, you will need both toolchains. 
+`Pixi <https://pixi.prefix.dev/latest/>`_ is used to manage all dependencies (rust, python, maturin, numpy, etc...).
+This guide assumes you are developing on a Linux environment (such as WSL Ubuntu 24).
 
-1. **Rust Toolchain**: You need ``rustc`` and ``cargo``. The easiest way to install this is via `rustup <https://rustup.rs/>`_:
-
-   .. code-block:: bash
-
-       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-2. **Pixi**: We use ``pixi`` for fast, reproducible Python environment management. 
+1. **Pixi**: We use ``pixi`` for fast, reproducible Python environment management. 
 
    .. code-block:: bash
 
@@ -64,6 +60,6 @@ Once compiled, you can verify that the Python frontend is successfully communica
 
 .. code-block:: bash
 
-    pixi run python -c "import mbc_mom.geometry; print('mbc_mom installed successfully!')"
+    pixi run python -c "import mbc_mom.geometry; print('mbc_mom installed successfully')"
 
 If no errors are raised, your high-performance MoM solver is ready to use. Proceed to the :doc:`quickstart` guide to run your first simulation.
