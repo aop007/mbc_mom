@@ -2,6 +2,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
+use crate::constants::C;
 use crate::geometry::Mesh;
 
 /// Generates the flat 1D coordinate arrays to be evaluated by the Python PropagationModel.
@@ -45,7 +46,7 @@ pub fn compute_incident_v_matrix(
     ez: Vec<Complex64>,
     points_per_seg: usize,
 ) -> Vec<Complex64> {
-    let k = (2.0 * PI * freq_hz) / 299_792_458.0;
+    let k = (2.0 * PI * freq_hz) / C;
     let mut v_matrix = vec![Complex64::new(0.0, 0.0); mesh.dipoles.len()];
 
     v_matrix.par_iter_mut().enumerate().for_each(|(i, v_val)| {

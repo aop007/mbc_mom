@@ -2,6 +2,7 @@ import numpy as np
 import scipy.linalg as la
 from typing import List, Tuple, Optional
 from mbc_mom import (
+    C,
     compute_impedance_matrix, 
     get_incident_eval_points, 
     compute_incident_v_matrix
@@ -25,8 +26,8 @@ class MockPropagationModel:
     def get_field_strength(self, tx: MockRadiator, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Assume a 1 V/m plane wave polarized along the Z-axis, traveling along -Y
         # E(y) = E0 * exp(j * k * y)
-        freq_hz = 300e6
-        k = (2.0 * np.pi * freq_hz) / 299792458.0
+        freq_hz = C  # wavelength = 1 m 
+        k = (2.0 * np.pi * freq_hz) / C
         
         # Calculate Phase shifts across the grid
         phase = k * ys
@@ -58,7 +59,7 @@ def main():
     mesh.build_dipoles()
     
     N = len(mesh.dipoles)
-    freq_hz = 300e6
+    freq_hz = C  # wavelength = 1 m
     points_per_seg = 7
     
     # Setup your external model environment

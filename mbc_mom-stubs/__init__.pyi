@@ -4,6 +4,11 @@ from typing import List, Tuple
 
 from . import geometry as geometry
 
+C: float
+EPS_0: float
+J: float
+ETA: float
+
 def test_interface() -> None: ...
 
 def compute_impedance_matrix(mesh: geometry.Mesh, frequency_hz: float) -> List[complex]: ...

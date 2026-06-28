@@ -2,6 +2,7 @@ use num_complex::Complex64;
 use std::f64::consts::PI;
 use rayon::prelude::*;
 
+use crate::constants::{C, EPS_0};
 
 /// Holds the pre-calculated physical constants for the ground environment
 #[derive(Clone, Copy, Debug)]
@@ -14,12 +15,10 @@ pub struct GroundPhysics {
 
 impl GroundPhysics {
     pub fn new(freq_hz: f64, eps_r: f64, sigma: f64) -> Self {
-        let c = 299_792_458.0;
-        let eps_0 = 8.8541878128e-12;
         let omega = 2.0 * PI * freq_hz;
         
-        let k0 = omega / c;
-        let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
+        let k0 = omega / C;
+        let eps_c = Complex64::new(eps_r, -sigma / (omega * EPS_0));
         
         // k1 = k0 * sqrt(eps_c)
         let k1 = Complex64::new(k0, 0.0) * eps_c.sqrt();

@@ -3,7 +3,8 @@
 
 import numpy as np
 import scipy.linalg as la
-from mbc_mom import compute_impedance_matrix
+import matplotlib.pyplot as plt
+from mbc_mom import compute_impedance_matrix, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 
@@ -37,7 +38,7 @@ def generate_excitation_vector(mesh: Mesh, N: int, driven_node_idx: int, freq_hz
     # 2. Magnetic Frill Model
     # Assume a standard 50 Ohm coaxial feed geometry where b/a ~ 2.3
     b = a * 2.3 
-    k = (2.0 * np.pi * freq_hz) / 299792458.0
+    k = (2.0 * np.pi * freq_hz) / C
     V_in = 1.0
     frill_factor = V_in / (2.0 * np.log(b / a))
     
@@ -93,10 +94,10 @@ def generate_excitation_vector(mesh: Mesh, N: int, driven_node_idx: int, freq_hz
         
     return V, driven_dipole_idx
 
-def run_analysis(num_segments: int, feed_type: str):
+def run_analysis(num_segments: int, feed_type: str) -> complex:
     mesh = Mesh()
     radius = 0.001
-    freq_hz = 300e6 
+    freq_hz = C  # wavelength = 1 m 
     
     driven_node_idx = build_half_wave_dipole(mesh, num_segments, radius)
     mesh.build_dipoles()
@@ -110,6 +111,7 @@ def run_analysis(num_segments: int, feed_type: str):
         # end for
         print("⚠️ *************************")
         
+        raise RuntimeError("Found warnings!")
     # end if
     
     flat_z = compute_impedance_matrix(mesh, freq_hz)
@@ -126,18 +128,60 @@ def run_analysis(num_segments: int, feed_type: str):
     Z_in = V_applied / I_in
 
     print(f"{num_segments:8d} | {Z_in.real:10.4f} | {Z_in.imag:10.4f}")
+    
+    return Z_in
 
-def main():
+def main(show=False):
     print("--- Convergence Analysis: Delta vs Frill (R=1mm) ---")
     print(f"{'Segments':>8} | {'Re(Z_in)':>10} | {'Im(Z_in)':>10}")
     
+    segments = 2.0 ** np.arange(1, 8, 0.125)
+    segments_int = np.asarray(segments, dtype=int)
+    segments_int = segments_int[np.where(segments_int % 2 == 0)]  # Keep even nb of segments
+    segments_int = np.array(list(sorted(set(segments_int.tolist()))))
+    
     print("\n[ Delta-Gap Feed ]")
-    for segs in [2, 10, 30, 60, 98]:
-        run_analysis(segs, "delta")
+    
+    delta_gap_z_in = [run_analysis(segs, "delta") for segs in segments_int]
         
     print("\n[ Magnetic Frill Feed ]")
-    for segs in [2, 10, 30, 60, 98]:
-        run_analysis(segs, "frill")
+    
+    mag_frill_gap_z_in = [run_analysis(segs, "frill") for segs in segments_int]
+        
+    fig, ax = plt.subplots()
+    
+    for op, linestyle, prefix in [
+        (np.real, '-', 'Re'),
+        (np.imag, '--', 'Im'),
+    ]:
+        ax.plot(
+            segments_int,
+            op(delta_gap_z_in),
+            marker='o',
+            linestyle=linestyle,
+            label=f'{prefix}(Delta Gap)',
+        )
+        
+        ax.plot(
+            segments_int,
+            op(mag_frill_gap_z_in),
+            marker='o',
+            linestyle=linestyle,
+            label=f'{prefix}(Magnetic Frill)',
+        )
+    # end for
+    
+    ax.grid()
+    ax.legend()
+    ax.semilogx()
+    ax.set_title("Input Impedance vs Segments")
+    ax.set_xlabel("Segments")
+    ax.set_ylabel("$Z_{in}$")
+    
+    if show:
+        plt.show()
+    # end if
+# end main()
 
 if __name__ == "__main__":
-    main()
+    main(show=True)

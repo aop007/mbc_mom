@@ -1,7 +1,9 @@
+#!/usr/bin/env python
+
 import numpy as np
 import scipy.linalg as la
 import matplotlib.pyplot as plt
-from mbc_mom import compute_impedance_matrix, compute_far_field
+from mbc_mom import compute_impedance_matrix, compute_far_field, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 
@@ -37,7 +39,7 @@ def main():
         mesh.build_dipoles()
         
         N = len(mesh.dipoles)
-        freq_hz = 300e6
+        freq_hz = C  # wavelength = 1 m
         
         # 1. Solve the Method of Moments
         Z = np.array(compute_impedance_matrix(mesh, freq_hz)).reshape((N, N))

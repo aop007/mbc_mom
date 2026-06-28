@@ -6,7 +6,7 @@ import scipy.linalg as la
 import matplotlib.pyplot as pyplot
 
 from mbc_mom.geometry import Mesh, Node, Segment
-from mbc_mom import compute_impedance_matrix
+from mbc_mom import compute_impedance_matrix, C
 
 
 def test_parallel_dipoles():
@@ -83,7 +83,7 @@ def test_half_wave_dipole(
     assert N % 2 == 1, f"Odd number of dipoles is expected!"
 
     # 300 MHz
-    freq_hz = 300e6 
+    freq_hz = C  # wavelength = 1 m 
     print(f"Computing Z matrix at {freq_hz / 1e6} MHz...")
     
     flat_z = compute_impedance_matrix(mesh, freq_hz)

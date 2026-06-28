@@ -17,7 +17,7 @@ This guide demonstrates how to build and simulate a simple center-fed half-wave 
    import numpy as np
    import matplotlib.pyplot as plt
    from mbc_mom.geometry import Mesh, Node, Segment
-   from mbc_mom import compute_impedance_matrix, compute_far_field
+   from mbc_mom import compute_impedance_matrix, compute_far_field, C
    
    # 1. Initialize the Mesh
    mesh = Mesh()
@@ -35,8 +35,8 @@ This guide demonstrates how to build and simulate a simple center-fed half-wave 
    # 4. Assemble the MBC basis functions
    mesh.build_dipoles()
    
-   # 5. Validate the mesh geometry at our target frequency (300 MHz)
-   freq_hz = 300e6
+   # 5. Validate the mesh geometry at our target frequency (~300 MHz)
+   freq_hz = C  # Wavelength = 1m
    warnings = mesh.validate(freq_hz)
    if warnings:
        print("Mesh validation warnings:", warnings)

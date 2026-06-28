@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.linalg as la
-from mbc_mom import compute_impedance_matrix
+from mbc_mom import compute_impedance_matrix, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 def build_dipole(mesh: Mesh, num_segments: int):
@@ -28,7 +28,7 @@ def main():
     mesh.build_dipoles()
     
     N = len(mesh.dipoles)
-    freq_hz = 300e6
+    freq_hz = C  # wavelength = 1 m
     
     # 1. Compute and Solve
     flat_z = compute_impedance_matrix(mesh, freq_hz)

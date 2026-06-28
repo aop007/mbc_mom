@@ -2,6 +2,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
+use crate::constants::{C, EPS_0, ETA, J};
 use crate::geometry::{Mesh};
 use crate::sommerfeld::{GroundPhysics, SommerfeldTable};
 
@@ -25,9 +26,8 @@ pub fn compute_grid(
     zs: Vec<f64>,
 ) -> (Vec<Complex64>, Vec<Complex64>, Vec<Complex64>, Vec<Complex64>, Vec<Complex64>, Vec<Complex64>) {
     
-    let k = (2.0 * PI * freq_hz) / 299_792_458.0;
-    let eta = 376.7303;
-    let j_cplx = Complex64::new(0.0, 1.0);
+    let omega = 2.0 * PI * freq_hz;
+    let k = omega / C;
 
     let has_ground = mesh.ground_plane.is_some();
     let (is_pec, eps_r, sigma, use_sommerfeld) = if let Some(g) = &mesh.ground_plane {
@@ -36,9 +36,7 @@ pub fn compute_grid(
         (false, 1.0, 0.0, false)
     };
 
-    let eps_0 = 8.8541878128e-12;
-    let omega = 2.0 * PI * freq_hz;
-    let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
+    let eps_c = Complex64::new(eps_r, -sigma / (omega * EPS_0));
 
     // Optional: Precompute Sommerfeld Ground Physics
     let lut = if has_ground && !is_pec && use_sommerfeld {
@@ -123,7 +121,7 @@ pub fn compute_grid(
                     let rho = (dx*dx + dy*dy).sqrt();
                     let z_sum = obs[2].abs() + img_cz.abs();
                     let exact_g = lut_ref.interpolate(rho, z_sum);
-                    let ideal_g = (-j_cplx * k * r_dist).exp() / r_dist;
+                    let ideal_g = (-J * k * r_dist).exp() / r_dist;
                     if ideal_g.norm() > 1e-12 { -(exact_g / ideal_g) } else { Complex64::new(0.0, 0.0) }
                 } else {
                     let cost = if r_dist == 0.0 { 1.0 } else { (dz / r_dist).abs() };
@@ -165,13 +163,13 @@ pub fn compute_grid(
                 let r = r_geom.max(rad.radius); 
                 let r_hat = if r_geom > 1e-14 { [dx/r_geom, dy/r_geom, dz/r_geom] } else { [0.0, 0.0, 1.0] };
 
-                let exp_term = (-j_cplx * k * r).exp();
+                let exp_term = (-J * k * r).exp();
                 let kr = k * r;
                 let kr_sq = kr * kr;
                 let u_dot_r = u_hat[0]*r_hat[0] + u_hat[1]*r_hat[1] + u_hat[2]*r_hat[2];
 
                 // Electric Field (dE)
-                let e_const = (-j_cplx * eta / (4.0 * PI * k)) * (current * ds * exp_term / (r * r * r));
+                let e_const = (-J * ETA / (4.0 * PI * k)) * (current * ds * exp_term / (r * r * r));
                 let t1 = Complex64::new(kr_sq - 1.0, -kr);
                 let t2 = Complex64::new(3.0 - kr_sq, 3.0 * kr);
                 

@@ -8,8 +8,10 @@ mod sommerfeld;
 mod nearfield;
 mod incident;
 pub mod expj;
+pub mod constants;
 
 use geometry::{Mesh};
+use constants::{C, EPS_0, J, ETA};
 
 #[pyfunction]
 pub fn test_interface() -> () {
@@ -71,6 +73,10 @@ fn mbc_mom(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_near_field, m)?)?;
     m.add_function(wrap_pyfunction!(get_incident_eval_points, m)?)?;
     m.add_function(wrap_pyfunction!(compute_incident_v_matrix, m)?)?;
+    m.add("C", C)?;
+    m.add("EPS_0", EPS_0)?;
+    m.add("J", J)?;
+    m.add("ETA", ETA)?;
 
     geometry::register_module(m)?;
     

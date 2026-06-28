@@ -3,7 +3,7 @@
 import matplotlib.pyplot as pyplot
 import numpy as np
 import scipy.linalg as la
-from mbc_mom import compute_impedance_matrix
+from mbc_mom import compute_impedance_matrix, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 def build_rectangular_loop(mesh: Mesh):
@@ -70,7 +70,7 @@ def main():
     
     # Analytical verification
     area = 0.030 * 0.0075
-    wavelength = 299792458.0 / freq_hz
+    wavelength = C / freq_hz
     r_analytical = 31200.0 * (area / (wavelength**2))**2 * 1e6
     print(f"\nAnalytical Target:    ~{r_analytical:.2f} micro-Ohms")
     

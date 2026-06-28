@@ -2,6 +2,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
+use crate::constants::{EPS_0, C, J, ETA};
 use crate::geometry::{Mesh, Dipole};
 use crate::sommerfeld::{GroundPhysics, SommerfeldTable};
 
@@ -80,7 +81,8 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
     let mut z_matrix = vec![Complex64::new(0.0, 0.0); n * n];
 
     // Free-space wavenumber k = 2 * pi * f / c
-    let k = (2.0 * PI * frequency_hz) / 299_792_458.0;
+    let omega = 2.0 * PI * frequency_hz;
+    let k = omega / C;
     let has_ground = mesh.ground_plane.is_some();
     let (is_pec, eps_r, sigma, use_sommerfeld) = if let Some(g) = &mesh.ground_plane {
         (g.is_pec, g.eps_r, g.sigma, g.use_sommerfeld)
@@ -88,9 +90,7 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
         (false, 1.0, 0.0, false)
     };
 
-    let eps_0 = 8.8541878128e-12;
-    let omega = 2.0 * PI * frequency_hz;
-    let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
+    let eps_c = Complex64::new(eps_r, -sigma / (omega * EPS_0));
 
     // Generate the Sommerfeld LUT if requested
     let lut = if has_ground && !is_pec && use_sommerfeld {
@@ -144,7 +144,7 @@ pub fn compute_z_matrix(mesh: &Mesh, frequency_hz: f64) -> Vec<Complex64> {
                             let exact_g = lut_ref.interpolate(rho, z_sum);
                             
                             // 2. Evaluate the ideal spatial image Green's function
-                            let ideal_g = (-Complex64::new(0.0, 1.0) * k * r).exp() / r;
+                            let ideal_g = (-J * k * r).exp() / r;
                             
                             // 3. Extract the Effective Reflection Coefficient
                             if ideal_g.norm() > 1e-12 {
@@ -217,7 +217,6 @@ fn monopole_mutual(sub_a: &SubSegment, sub_b: &SubSegment, k: f64) -> Complex64 
     let sin_kl_b = (k * len_b).sin();
 
     let mut sum = Complex64::new(0.0, 0.0);
-    let j_cplx = Complex64::new(0.0, 1.0);
 
     for i in 0..steps {
         let s = (i as f64 + 0.5) * ds;
@@ -244,11 +243,11 @@ fn monopole_mutual(sub_a: &SubSegment, sub_b: &SubSegment, k: f64) -> Complex64 
             let qz = sub_b.p1[2] + t_hat[2] * t;
 
             let dist = ((px-qx).powi(2) + (py-qy).powi(2) + (pz-qz).powi(2) + offset_sq).sqrt();
-            let green = (-j_cplx * k * dist).exp() / dist;
+            let green = (-J * k * dist).exp() / dist;
             
             sum += green * (s_dot_t * i_a * i_b - (di_a * di_b) / (k * k));
         }
     }
 
-    sum * j_cplx * (376.7303 / (4.0 * PI)) * k * ds * dt
+    sum * J * (ETA / (4.0 * PI)) * k * ds * dt
 }

@@ -3,7 +3,7 @@
 import numpy as np
 import scipy.linalg as la
 import matplotlib.pyplot as plt
-from mbc_mom import compute_impedance_matrix, compute_far_field
+from mbc_mom import compute_impedance_matrix, compute_far_field, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 def build_monopole(mesh: Mesh, num_segments: int, height_m: float = 0.25):
@@ -33,7 +33,7 @@ def main(use_pec: bool = False, use_dry_gnd: bool = False, use_saltwater: bool =
     mesh.build_dipoles()
     
     N = len(mesh.dipoles)
-    freq_hz = 300e6
+    freq_hz = C  # wavelength = 1 m
     
     # 1. Solve MoM
     Z = np.array(compute_impedance_matrix(mesh, freq_hz)).reshape((N, N))

@@ -5,7 +5,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mbc_mom.geometry import Mesh, Node, Segment
-from mbc_mom import compute_impedance_matrix, compute_far_field
+from mbc_mom import compute_impedance_matrix, compute_far_field, C
 
 # 1. Initialize the Mesh
 mesh = Mesh()
@@ -24,7 +24,7 @@ mesh.add_segment(Segment(n1, n2, radius))
 mesh.build_dipoles()
 
 # 5. Validate the mesh geometry at our target frequency (300 MHz)
-freq_hz = 300e6
+freq_hz = C  # Wavelength = 1 m
 warnings = mesh.validate(freq_hz)
 if warnings:
     print("Mesh validation warnings:", warnings)

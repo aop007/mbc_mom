@@ -4,7 +4,7 @@ import numpy as np
 import scipy.linalg as la
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-from mbc_mom import compute_impedance_matrix, compute_near_field
+from mbc_mom import compute_impedance_matrix, compute_near_field, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 def build_dipole(mesh: Mesh, num_segments: int):
@@ -22,7 +22,7 @@ def main():
     mesh.build_dipoles()
     
     N = len(mesh.dipoles)
-    freq_hz = 300e6
+    freq_hz = C  # ewavelength = 1 m
     
     # 1. Solve MoM for the exact current distribution
     print("Solving Impedance Matrix...")

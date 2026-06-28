@@ -2,7 +2,7 @@
 
 import numpy as np
 import scipy.linalg as la
-from mbc_mom import compute_impedance_matrix
+from mbc_mom import compute_impedance_matrix, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 def build_monopole(mesh: Mesh, num_segments: int):
@@ -44,7 +44,7 @@ def main():
     print(f"Base Dipole identified as grounded monopole: {driven_dipole.is_monopole}")
 
     # 3. Compute and Solve
-    freq_hz = 300e6  # 300 MHz
+    freq_hz = C  # Wavelength = 1m (~300 MHz)
     print(f"Computing Z matrix at {freq_hz / 1e6} MHz (including virtual images)...")
     
     flat_z = compute_impedance_matrix(mesh, freq_hz)

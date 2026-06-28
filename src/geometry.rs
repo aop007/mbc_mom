@@ -1,5 +1,7 @@
 use pyo3::prelude::*;
 
+use crate::constants::C;
+
 /// Represents a 3D coordinate in space.
 #[pyclass(from_py_object)]
 #[derive(Clone, Debug, PartialEq)]
@@ -221,7 +223,7 @@ impl Mesh {
     /// Returns a list of human-readable warning strings. If empty, the mesh is pristine.
     pub fn validate(&self, freq_hz: f64) -> Vec<String> {
         let mut warnings = Vec::new();
-        let lambda = 299_792_458.0 / freq_hz;
+        let lambda = C / freq_hz;
 
         // 1. Segment-Level Checks
         for (i, seg) in self.segments.iter().enumerate() {

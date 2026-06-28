@@ -2,6 +2,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
+use crate::constants::{C, EPS_0, ETA};
 use crate::geometry::{Mesh, Segment};
 
 pub fn compute_pattern(
@@ -10,8 +11,8 @@ pub fn compute_pattern(
     freq_hz: f64,
     thetas_phis: Vec<(f64, f64)>,
 ) -> Vec<f64> {
-    let k = (2.0 * PI * freq_hz) / 299_792_458.0;
-    let eta = 376.7303;
+    let omega = 2.0 * PI * freq_hz;
+    let k = omega / C;
 
     // 1. Extract Ground Parameters
     let has_ground = mesh.ground_plane.is_some();
@@ -22,9 +23,7 @@ pub fn compute_pattern(
     };
 
     // Calculate Complex Permittivity
-    let eps_0 = 8.8541878128e-12;
-    let omega = 2.0 * PI * freq_hz;
-    let eps_c = Complex64::new(eps_r, -sigma / (omega * eps_0));
+    let eps_c = Complex64::new(eps_r, -sigma / (omega * EPS_0));
 
     struct Radiator {
         center: [f64; 3],
@@ -129,7 +128,7 @@ pub fn compute_pattern(
             n_phi_total += e_phi_dir + (e_phi_ref * gamma_h);
         }
 
-        *u_val = (k * k * eta / (32.0 * PI * PI)) * (n_theta_total.norm_sqr() + n_phi_total.norm_sqr());
+        *u_val = (k * k * ETA / (32.0 * PI * PI)) * (n_theta_total.norm_sqr() + n_phi_total.norm_sqr());
     });
 
     u_grid

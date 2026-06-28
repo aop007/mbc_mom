@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg as la
-from mbc_mom import compute_impedance_matrix
+from mbc_mom import compute_impedance_matrix, C
 from mbc_mom.geometry import Mesh, Node, Segment
 
 def build_horizontal_dipole(mesh: Mesh, num_segments: int, height: float):
@@ -26,7 +26,7 @@ def solve_antenna(use_sommerfeld: bool) -> complex:
     mesh.build_dipoles()
     
     N = len(mesh.dipoles)
-    freq_hz = 300e6
+    freq_hz = C  # wavelength = 1 m
     
     # Solve MoM
     Z = np.array(compute_impedance_matrix(mesh, freq_hz)).reshape((N, N))
